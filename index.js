@@ -37,7 +37,6 @@ io.use((socket, next) => {
 });
 
 io.on("connection", async (socket) => {
-    //存取對話
     saveSession(socket.sessionId, {
         userId: socket.userId,
         username: socket.username,
@@ -67,20 +66,38 @@ io.on("connection", async (socket) => {
         userId: socket.userId,
         username: socket.username,
     });
-
-    //new user event
+    // new user event
     socket.broadcast.emit("user connected", {
         userId: socket.userId,
         username: socket.username,
     });
+    //private message event 
+    socket.on("private message", ({ content, to }) => {
+        const message = {
+            from: socket.userId,
+            to,
+            content,
+        }
+        socket.to(to).emit("private message", message);
+    });
+    socket.on("disconnect", async () => {
+        const matchingSockets = await io.in(socket.userId).allSockets();
+        const isDisconnected = matchingSockets.size === 0;
+        if (isDisconnected) {
+            // 通知其他用戶
+            socket.broadcast.emit("user disconnected", {
+                userId: socket.userId,
+                username: socket.username,
+            });
+            // 更新session的連接狀態
+            saveSession(socket.sessionId, {
+                userId: socket.userId,
+                username: socket.username,
+                connected: socket.connected,
+            })
+        }
 
-    //new message event 
-    socket.on("new message", (message) => {
-        socket.broadcast.emit("new message", {
-            userId: socket.userId,
-            username: socket.username,
-            message,
-        })
+
     })
 })
 
