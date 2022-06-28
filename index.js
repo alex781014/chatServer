@@ -48,6 +48,7 @@ function getMessagesForUser(userId) {
             messagesPerUser.set(otherUser, [message]);
         }
     })
+    return messagesPerUser;
 }
 
 io.on("connection", async (socket) => {
