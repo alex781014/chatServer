@@ -2,6 +2,7 @@ import { createServer } from "http";
 import { Server } from "socket.io";
 import { v4 as uuidv4 } from "uuid";
 import { saveSession, findSession, findAllSessions } from "./src/sessionStorage.js"
+import { findMessagesForUser, saveMessage } from "./src/messageStorage.js";
 
 const httpServer = createServer();
 const io = new Server(httpServer, {
@@ -35,6 +36,19 @@ io.use((socket, next) => {
     socket.sessionId = uuidv4();
     next();
 });
+// 存訊息
+function getMessagesForUser(userId) {
+    const messagesPerUser = new Map();
+    findMessagesForUser(userId).forEach((message) => {
+        const { from, to } = message;
+        const otherUser = userId === from ? to : from;
+        if (messagesPerUser.has(otherUser)) {
+            messagesPerUser.get(otherUser).push(message);
+        } else {
+            messagesPerUser.set(otherUser, [message]);
+        }
+    })
+}
 
 io.on("connection", async (socket) => {
     saveSession(socket.sessionId, {
@@ -46,16 +60,19 @@ io.on("connection", async (socket) => {
     socket.join(socket.userId);
 
     //get all connected users
+    //取得所有已連線的使用者
     const users = [];
+    const userMessages = getMessagesForUser(socket.userId);
     findAllSessions().forEach((session) => {
         if (session.userId !== socket.userId) {
             users.push({
                 userId: session.userId,
                 username: session.username,
                 connected: session.connected,
+                messages: userMessages.get(session.userId) || [],
             });
         }
-    })
+    });
 
     //all users event
     socket.emit("users", users);
@@ -71,15 +88,27 @@ io.on("connection", async (socket) => {
         userId: socket.userId,
         username: socket.username,
     });
-    //private message event 
+    //私訊event 
     socket.on("private message", ({ content, to }) => {
         const message = {
             from: socket.userId,
             to,
             content,
-        }
+        };
         socket.to(to).emit("private message", message);
+        saveMessage(message)
     });
+
+    socket.on("user messages", ({ userId, username }) => {
+        const userMessages = getMessagesForUser(socket.userId)
+        socket.emit("user messages", {
+            userId,
+            username,
+            messages: userMessages.get(userId) || [],
+        });
+    })
+
+
     socket.on("disconnect", async () => {
         const matchingSockets = await io.in(socket.userId).allSockets();
         const isDisconnected = matchingSockets.size === 0;
