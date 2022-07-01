@@ -1,6 +1,7 @@
 import { createServer } from "http";
 import { Server } from "socket.io";
 import { v4 as uuidv4 } from "uuid";
+import { setupWorker } from "@socket.io/sticky"
 import { saveSession, findSession, findAllSessions } from "./src/sessionStorage.js"
 import { findMessagesForUser, saveMessage } from "./src/messageStorage.js";
 
@@ -133,3 +134,7 @@ io.on("connection", async (socket) => {
 
 console.log("Listening to port...");
 httpServer.listen(process.env.PORT || 4000);
+
+export function start() {
+    setupWorker(io)
+}
